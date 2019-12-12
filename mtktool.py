@@ -76,7 +76,7 @@ class MTKtools():
         """
         send a command to the bootloader
         """
-        self.ser_port.write(cmd)
+        self.ser_port.write(cmd.encode())
         res = self.ser_port.read(res_length)
         return res
 
@@ -86,6 +86,7 @@ class MTKtools():
         """
         print("sending token and start")
         self.send_cmd("\xa0\x00\x4b\x00\x00\x00\x00\x08\xa0\x0a\x50\x05", 16)
+        time.sleep(.1)
         print("sending CMD_GET_HW_CODE")
         self.send_cmd(CMD_GET_HW_CODE, 5)
         print("sending CMD_GET_HW_SW_VER")
@@ -112,14 +113,14 @@ class MTKtools():
                 print("Connection timed out.")
                 return False
             try:
-                num_bytes = self.ser_port.inWaiting()
+                data = self.ser_port.read(5)
+                print(data)
+                if data.decode() == "READY":
+                    break
             except IOError as err:
-                print("Nooooooo... {0}".format(err))
-                raise err
-                return False
-            data = self.ser_port.readline(num_bytes)
-            if data == "READY":
-                break
+                # print("Nooooooo... {0}".format(err))
+                pass
+            time.sleep(.2)
 
         self.send_initial_commands()
         print("sending CMD_SEND_DA fingers crossed ")
@@ -168,8 +169,12 @@ class MTKtools():
             if time.time() > timeout:
                 return False
             try:
-                # some people suggest rtscts=False but it fails
-                self.ser_port = serial.Serial(port, 19200, timeout=100)
+                self.ser_port = serial.Serial(
+                    port,
+                    baudrate=115200,
+                    timeout=100,
+                    rtscts=False
+                )
                 break
 
             except serial.serialutil.SerialException:
