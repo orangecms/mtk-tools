@@ -13,25 +13,26 @@ import serial
 """
 Preloader Commands
 """
-CMD_GET_VERSION = "\xff"
-CMD_GET_BL_VER = "\xfe"
-CMD_GET_HW_SW_VER = "\xfc"
-CMD_GET_HW_CODE = "\xfd"
-CMD_SEND_DA = "\xd7"
-CMD_JUMP_DA = "\xd5"
-CMD_GET_TARGE_CONFIG = "\xd8"
-CMD_READ16 = "\xa2"
-CMD_WRITE16 = "\xd2"
-CMD_READ32 = "\xd1"
-CMD_WRITE32 = "\xd4"
-CMD_PWR_INIT = "\xc4"
-CMD_PWR_DEINIT = "\xc5"
-CMD_PWR_READ16 = "\xc6"
-CMD_PWR_WRITE16 = "\xc7"
+CMD_GET_VERSION = b"\xff"
+CMD_GET_BL_VER = b"\xfe"
+CMD_GET_HW_SW_VER = b"\xfc"
+CMD_GET_HW_CODE = b"\xfd"
+CMD_SEND_DA = b"\xd7"
+CMD_JUMP_DA = b"\xd5"
+CMD_GET_TARGE_CONFIG = b"\xd8"
+CMD_READ16 = b"\xa2"
+CMD_WRITE16 = b"\xd2"
+CMD_READ32 = b"\xd1"
+CMD_WRITE32 = b"\xd4"
+CMD_PWR_INIT = b"\xc4"
+CMD_PWR_DEINIT = b"\xc5"
+CMD_PWR_READ16 = b"\xc6"
+CMD_PWR_WRITE16 = b"\xc7"
 AGENT_BINARY = "MTK_AllInOne_DA.bin"
 AGENT_OFFSET = 0x8280c
 BLOCK1_LENGTH = 0x00ea6c
 BLOCK2_LENGTH = 0x027530
+TOKEN = bytes.fromhex('a0004b0000000008a00a5005')
 
 def split_by_n(seq, unit_count):
     """A generator to divide a sequence into chunks of n units."""
@@ -76,16 +77,32 @@ class MTKtools():
         """
         send a command to the bootloader
         """
-        self.ser_port.write(cmd.encode())
-        res = self.ser_port.read(res_length)
-        return res
+        print("Sending ", cmd)
+        written = self.ser_port.write(cmd)
+        print(written, " bytes written")
+        self.ser_port.flush()
+        timeout = time.time() + 1
+        print("Reading...")
+        while True:
+            if time.time() > timeout:
+                print("Read timed out.")
+                return False
+            try:
+                num_bytes_waiting = self.ser_port.in_waiting
+                res = self.ser_port.read(res_length)
+                print(res)
+                return res
+                break
+            except IOError as err:
+                print("Nooooooo... {0}".format(err))
+                time.sleep(.2)
 
     def send_initial_commands(self):
         """
         send initial commands
         """
         print("sending token and start")
-        self.send_cmd("\xa0\x00\x4b\x00\x00\x00\x00\x08\xa0\x0a\x50\x05", 16)
+        self.send_cmd(TOKEN, 16)
         time.sleep(.1)
         print("sending CMD_GET_HW_CODE")
         self.send_cmd(CMD_GET_HW_CODE, 5)
@@ -113,15 +130,15 @@ class MTKtools():
                 print("Connection timed out.")
                 return False
             try:
-                data = self.ser_port.read(5)
+                data = self.ser_port.readline(5)
                 print(data)
                 if data.decode() == "READY":
                     break
             except IOError as err:
-                # print("Nooooooo... {0}".format(err))
-                pass
-            time.sleep(.2)
+                print("Nooooooo... {0}".format(err))
+                time.sleep(.1)
 
+        self.ser_port.flush()
         self.send_initial_commands()
         print("sending CMD_SEND_DA fingers crossed ")
         self.send_cmd(CMD_SEND_DA+"\x02\x00\x70\x00\x00\x00\xea\x6c\x00\x00\x01\x00", 15)
